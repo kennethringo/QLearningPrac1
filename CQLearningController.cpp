@@ -35,8 +35,10 @@ void CQLearningController::InitializeLearningAlgorithm(void)
 
 	
 	for (int i = 0; i < m_vecSweepers.size(); i++) {
+		vector <double> actions = { 0.0,0.0,0.0,0.0 };
+		qTable.push_back(make_pair(m_vecSweepers.at(i)->PrevPosition(), actions));
 		
-		qTable.push_back(make_tuple(m_vecSweepers.at(i), m_vecSweepers.at(i)->Position(), 0.0));
+		
 	}
 	
 
@@ -49,10 +51,10 @@ void CQLearningController::InitializeLearningAlgorithm(void)
  of course for hitting supermines/rocks!
 */
 double CQLearningController::R(uint x,uint y, uint sweeper_no){
-	
+	//TODO: roll your own here!
 	int GrabHit = ((m_vecSweepers[sweeper_no])->CheckForObject(m_vecObjects,
 		CParams::dMineScale));
-
+	double reward = 
 	if (GrabHit >= 0)
 	{
 		switch (m_vecObjects[GrabHit]->getType()) {
@@ -72,22 +74,31 @@ double CQLearningController::R(uint x,uint y, uint sweeper_no){
 	}
 		
 	
-	//return -10;
-		
-	/*for (int i = 0; i < m_vecObjects.size(); i++) {
-		if (!m_vecObjects[i]->isDead()) {
-			return -10;
-		}
-		return 50;
-	}*/
-	/*if (m_vecSweepers[sweeper_no]->Position() !=  m_vecSweepers[sweeper_no]->PrevPosition()) {
-	}*/
-			//return -10;
-		
-	
-	//TODO: roll your own here!
 	
 }
+
+int CQLearningController::getActionMax(std::vector<double> actions) {
+	
+	int maxVal = (int)actions[0];
+	for (uint a = 1; a < 4; a++) {
+		if (actions[a] > maxVal) {
+			maxVal = actions[a];
+		}
+	}
+	return maxVal;
+	
+	/*std::vector<int> maxs;
+	for (uint i = 0; i < 4; i++) {
+		if (actions[i] == max_val) {
+			maxs.push_back(i);
+		}
+	}
+
+	int ri = RandInt(0, maxs.size() - 1);
+	return maxs[ri];*/
+}
+
+
 /**
 The update method. Main loop body of our Q Learning implementation
 See: Watkins, Christopher JCH, and Peter Dayan. "Q-learning." Machine learning 8. 3-4 (1992): 279-292
@@ -112,33 +123,20 @@ bool CQLearningController::Update(void)
 		Q-learning algorithm according to:
 		Watkins, Christopher JCH, and Peter Dayan. "Q-learning." Machine learning 8. 3-4 (1992): 279-292
 		*/
-		//1:::Observe the current state:
 		
-		/*double action;
-		for (int i = 0; i < m_vecSweepers.size(); i++) {
-			std::get<1>(qTable[i]) = m_vecSweepers[i]->Position();
-			action = R(m_vecSweepers[i]->Position().x, m_vecSweepers[i]->Position().y, i);
-			if (action < 0) {
-				m_vecSweepers[i]->setRotation((ROTATION_DIRECTION)RandInt(0, 3));
-			}
-		}
-		*/
+		
+		//1:::Observe the current state:
+		//2:::Select action with highest historic return:
+		int action;
+		for (int i = 0; i < qTable.size(); i++) {
 
-		for (int i = 0; i < m_vecSweepers.size(); i++) {
-			//std::vector<int> list{ 0, 1, 2, 3 };
-			//int index = rand() % list.size(); // pick a random index
-			//int value = list[index];
-			// RandInt(m_vecSweepers[i]->getRotation);  
+			SVector2D<int> position = m_vecSweepers[i]->PrevPosition();
+			action = getActionMax(qTable[i].second);
+			m_vecSweepers[i]->setRotation((ROTATION_DIRECTION)action);
+			//action = R(m_vecSweepers[i]->Position().x, m_vecSweepers[i]->Position().y, i);
 			
 		}
-		//TODO
-		//2:::Select action with highest historic return:
-		//TODO
-		for (int i = 0; i < m_vecSweepers.size(); i++) {
 		
-		}
-
-
 		//now call the parents update, so all the sweepers fulfill their chosen action
 	}
 	
@@ -148,6 +146,15 @@ bool CQLearningController::Update(void)
 		if (m_vecSweepers[sw]->isDead()) continue;
 		//TODO:compute your indexes.. it may also be necessary to keep track of the previous state
 		//3:::Observe new state:
+		for (int i = 0; i < qTable.size(); i++) {
+			SVector2D<int> PrevPosition = m_vecSweepers[i]->PrevPosition();
+			SVector2D<int> Position = m_vecSweepers[i]->Position();
+			int currentAction = m_vecSweepers[i]->getRotation();
+			int previousAction = getActionMax(qTable[i].second);
+			//std::get<2>(qTable[i]).at(action) = (1 - learningFactor);
+			//std::get<0>(qTable[i])->PrevPosition[action];
+		}
+		
 		//TODO
 		//4:::Update _Q_s_a accordingly:
 		//TODO
