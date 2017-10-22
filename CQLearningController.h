@@ -27,8 +27,8 @@ public:
 
 	double R(uint x, uint y, uint sweeper_no);
 
-	int getActionMaxIndex(std::vector<double> actions);
-	int getActionMaxVal(std::vector<double> actions);
+	int getActionMaxIndex(std::vector<double> &actions);
+	int getActionMaxVal(std::vector<double> &actions);
 	
 	virtual bool Update(void);
 	virtual ~CQLearningController(void);
