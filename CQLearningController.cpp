@@ -34,68 +34,143 @@ void CQLearningController::InitializeLearningAlgorithm(void)
 	
 
 	
-	for (int i = 0; i < m_vecSweepers.size(); i++) {
+	/*for (int i = 0; i < m_vecSweepers.size(); i++) {
 		vector <double> actions = { 0.0,0.0,0.0,0.0 };
 		qTable.push_back(make_pair(m_vecSweepers.at(i)->PrevPosition(), actions));
 		
 		
+	}*/
+	vector <double> actions = { 0.0,0.0,0.0,0.0 };
+	
+
+	vector<vector<vector<double>>> qTable1(_grid_size_y, vector<vector<double>>(_grid_size_x, vector<double>(4)));
+	
+
+	for (uint x = 0; x < _grid_size_x; x++) {
+		
+		for (uint y = 0; y < _grid_size_y; y++) {
+			qTable1[y][x] = actions;
+		}
+		
+	}
+	qTable = qTable1;
+
+	for (uint i = 0; i < CParams::iNumSweepers; i++) {
+		deadSweepers.push_back(false);
 	}
 	
 
 
 	//TODO
 }
+
+
+void CQLearningController::resetDeadSweepers() {
+	for (uint i = 0; i <CParams::iNumSweepers; i++) {
+		deadSweepers.at(i) = false;
+	}
+}
+
+
 /**
  The immediate reward function. This computes a reward upon achieving the goal state of
  collecting all the mines on the field. It may also penalize movement to encourage exploring all directions and 
  of course for hitting supermines/rocks!
 */
 double CQLearningController::R(uint x,uint y, uint sweeper_no){
+	double reward = 0.0f;
 	//TODO: roll your own here!
-	int GrabHit = ((m_vecSweepers[sweeper_no])->CheckForObject(m_vecObjects,
+	int foundOne = ((m_vecSweepers.at(sweeper_no))->CheckForObject(m_vecObjects,
 		CParams::dMineScale));
-	double reward = 
-	if (GrabHit >= 0)
+	
+	
+	if (foundOne >= 0)
 	{
-		switch (m_vecObjects[GrabHit]->getType()) {
-		case CDiscCollisionObject::Mine:
-		{
-			return 100;
-		}
-		case CDiscCollisionObject::Rock:
-		{
-			return -80;
-		}
-		case CDiscCollisionObject::SuperMine:
-		{
-			return -80;
-		}
+		switch (m_vecObjects.at(foundOne)->getType()) {
+			case CDiscCollisionObject::Mine:
+			{
+				reward = 100.0f;
+				break;
+			}
+			case CDiscCollisionObject::Rock:
+			{
+				reward = -100.0f;
+				break;
+			}
+			case CDiscCollisionObject::SuperMine:
+			{
+				reward = -100.0f;
+				break;
+			}
 		}
 	}
-		
-	
-	
+	else {
+		reward = -10.0f;
+	}
+	return reward;
 }
 
-int CQLearningController::getActionMax(std::vector<double> actions) {
-	
-	int maxVal = (int)actions[0];
+int CQLearningController::getActionMaxIndex(std::vector<double> actions) {
+
+	int maxVal = (int)actions.at(0);
+	int index = 0;
 	for (uint a = 1; a < 4; a++) {
-		if (actions[a] > maxVal) {
-			maxVal = actions[a];
+		if (actions.at(a) > maxVal) {
+			maxVal = actions.at(a);
+			index = a;
 		}
 	}
-	return maxVal;
-	
-	/*std::vector<int> maxs;
-	for (uint i = 0; i < 4; i++) {
-		if (actions[i] == max_val) {
-			maxs.push_back(i);
+	std::vector<int> allMaxIndexes;
+	allMaxIndexes.push_back(index);
+	for (uint a = 0; a < 4; a++) {
+		if (a == index) {
+			//skip
+		}
+		else {
+			if (actions.at(a)== maxVal) {
+				allMaxIndexes.push_back(a);
+			}
+		}
+	}
+	int randomIndex = index;
+	if (allMaxIndexes.size() > 1) {
+		randomIndex = RandInt(0, allMaxIndexes.size() - 1);
+	}
+
+	return randomIndex;
+}
+
+int CQLearningController::getActionMaxVal(std::vector<double> actions) {
+
+	int maxVal = (int)actions.at(0);
+	int index = 0;
+	for (uint a = 1; a < 4; a++) {
+		if (actions.at(a) > maxVal) {
+			maxVal = actions.at(a);
+			index = a;
 		}
 	}
 
-	int ri = RandInt(0, maxs.size() - 1);
-	return maxs[ri];*/
+	std::vector<int> allMaxes;
+	allMaxes.push_back(maxVal);
+	for (uint a = 1; a < 4; a++) {
+		if (a == index) {
+			//skip
+		}
+		else {
+			if (actions.at(a) == maxVal) {
+				allMaxes.push_back(actions.at(a));
+			}
+		}
+	}
+	int random = 0;
+	if (allMaxes.size() > 1) {
+		random = RandInt(0, allMaxes.size() - 1);
+	}
+
+	return random;
+	////////////////////////////////////////////////////////////////////////
+	
 }
 
 
@@ -118,7 +193,10 @@ bool CQLearningController::Update(void)
 	}
 
 	for (uint sw = 0; sw < CParams::iNumSweepers; ++sw){
-		if (m_vecSweepers[sw]->isDead()) continue;
+		if (m_vecSweepers[sw]->isDead()) {
+			deadSweepers.at(sw) = true;
+			continue;
+		} 
 		/**
 		Q-learning algorithm according to:
 		Watkins, Christopher JCH, and Peter Dayan. "Q-learning." Machine learning 8. 3-4 (1992): 279-292
@@ -128,14 +206,16 @@ bool CQLearningController::Update(void)
 		//1:::Observe the current state:
 		//2:::Select action with highest historic return:
 		int action;
-		for (int i = 0; i < qTable.size(); i++) {
+		
 
-			SVector2D<int> position = m_vecSweepers[i]->PrevPosition();
-			action = getActionMax(qTable[i].second);
-			m_vecSweepers[i]->setRotation((ROTATION_DIRECTION)action);
+			SVector2D<int> position = m_vecSweepers[sw]->Position();
+			position /= 10;
+			action = getActionMaxIndex(qTable[position.x][position.y]);
+			m_vecSweepers[sw]->setRotation((ROTATION_DIRECTION)action);
+			//R(position.x, position.y, sw);
 			//action = R(m_vecSweepers[i]->Position().x, m_vecSweepers[i]->Position().y, i);
 			
-		}
+		
 		
 		//now call the parents update, so all the sweepers fulfill their chosen action
 	}
@@ -143,21 +223,44 @@ bool CQLearningController::Update(void)
 	CDiscController::Update(); //call the parent's class update. Do not delete this.
 	
 	for (uint sw = 0; sw < CParams::iNumSweepers; ++sw){
-		if (m_vecSweepers[sw]->isDead()) continue;
+		if (m_vecSweepers[sw]->isDead()) {
+			deadSweepers.at(sw) = true;
+			continue;
+		} 
 		//TODO:compute your indexes.. it may also be necessary to keep track of the previous state
 		//3:::Observe new state:
-		for (int i = 0; i < qTable.size(); i++) {
-			SVector2D<int> PrevPosition = m_vecSweepers[i]->PrevPosition();
-			SVector2D<int> Position = m_vecSweepers[i]->Position();
-			int currentAction = m_vecSweepers[i]->getRotation();
-			int previousAction = getActionMax(qTable[i].second);
+		else if (!m_vecSweepers[sw]->isDead()) {
+
+			SVector2D<int> prevPosition = m_vecSweepers[sw]->PrevPosition();
+			prevPosition /= 10;
+			SVector2D<int> position = m_vecSweepers[sw]->Position();
+			position /= 10;
+			int currentAction = (int)m_vecSweepers[sw]->getRotation();
+			//int previousAction = getActionMax(qTable[i].second);
 			//std::get<2>(qTable[i]).at(action) = (1 - learningFactor);
 			//std::get<0>(qTable[i])->PrevPosition[action];
+			//4:::Update _Q_s_a accordingly:
+			//qTable.at(prevPosition.x).at(prevPosition.y).at(currentAction) += (lambda * (R(position.x, position.y, sw) + learningFactor * getActionMaxVal(qTable[position.x][position.y]) -  qTable[prevPosition.x][prevPosition.y][currentAction]));
+		
+			//qTable[prevPosition.x][prevPosition.y][currentAction] += (lambda * (R(position.x, position.y, sw) + (learningFactor * getActionMaxIndex( qTable[position.x][position.y])) - qTable[prevPosition.x][prevPosition.y][currentAction]));
+			//qTable[i].second[currentAction]
+			//R(position.x, position.y, sw);
+			//1
+			qTable[prevPosition.x][prevPosition.y][currentAction] += learningFactor * (R(position.x, position.y, sw) + lambda * (getActionMaxVal(qTable[position.x][position.y]) - qTable[prevPosition.x][prevPosition.y][currentAction]));
+			//2
+			//qTable[prevPosition.x][prevPosition.y][currentAction] += (lambda * (R(position.x, position.y, sw) + (learningFactor * getActionMaxVal(qTable[position.x][position.y])) - qTable [prevPosition.x][prevPosition.y][currentAction]));
+			//qTable[prevPosition.x][prevPosition.y][currentAction] += R(position.x, position.y, sw) + lambda * getActionMaxVal(qTable[prevPosition.x][prevPosition.y]);
+			//qTable[position.x][position.y][currentAction] = (1 - learningFactor) * (qTable[prevPosition.x][prevPosition.y][currentAction]) + (learningFactor * (R(position.x, position.y, sw) + lambda * getActionMaxVal(qTable[prevPosition.x][prevPosition.y])));
 		}
+			
+		
 		
 		//TODO
-		//4:::Update _Q_s_a accordingly:
+		
 		//TODO
+	}
+	if (m_iTicks == CParams::iNumTicks) {
+		resetDeadSweepers();
 	}
 	return true;
 }
